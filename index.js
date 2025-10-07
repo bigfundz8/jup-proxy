@@ -1,6 +1,7 @@
 import express from 'express';
 import fetch from 'node-fetch';
 import https from 'https';
+import { Agent as UndiciAgent } from 'undici';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -72,7 +73,13 @@ app.all('*', async (req, res) => {
         const ipUrl = new URL(upstream);
         ipUrl.hostname = ip;
         const agent = new https.Agent({ rejectUnauthorized: false, servername: upstreamHost });
-        const opts = { ...fetchOpts, agent, headers: { ...fetchOpts.headers, Host: upstreamHost } };
+        const dispatcher = new UndiciAgent({ connect: { rejectUnauthorized: false, servername: upstreamHost } });
+        const opts = { 
+          ...fetchOpts, 
+          agent, 
+          dispatcher, 
+          headers: { ...fetchOpts.headers, Host: upstreamHost, host: upstreamHost } 
+        };
         resp = await fetch(ipUrl.toString(), opts);
         if (resp && resp.status) break;
       } catch (e) {
