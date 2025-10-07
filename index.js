@@ -6,6 +6,9 @@ import { Agent as UndiciAgent } from 'undici';
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 
+// Jupiter Pro API Key (uit environment variable)
+const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
+
 // Map bekende Jupiter paden naar de juiste upstream
 const map = {
   '/v6/quote': 'https://quote-api.jup.ag',
@@ -52,7 +55,9 @@ app.all('*', async (req, res) => {
       method: req.method,
       headers: {
         'user-agent': 'Mozilla/5.0',
-        'accept': 'application/json'
+        'accept': 'application/json',
+        // Jupiter Pro API Key header
+        ...(JUPITER_API_KEY && { 'Authorization': `Bearer ${JUPITER_API_KEY}` })
       },
       body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body)
     };
