@@ -56,23 +56,37 @@ app.all('*', async (req, res) => {
       body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body)
     };
 
+    // Kandidaten: DoH-resultaat + bekende Cloudflare edge IP's
+    const candidates = [];
     try {
       const ip = await resolveA(upstreamHost);
-      if (ip) {
+      if (ip) candidates.push(ip);
+    } catch (_) {}
+    // Bekende CF IP's voor jup.ag
+    candidates.push('104.18.10.194', '104.18.11.194');
+
+    let resp;
+    let lastErr;
+    for (const ip of candidates) {
+      try {
         const ipUrl = new URL(upstream);
         ipUrl.hostname = ip;
-        // Houd poort/protocol gelijk; schakel TLS check uit maar stuur juiste SNI
         const agent = new https.Agent({ rejectUnauthorized: false, servername: upstreamHost });
-        fetchOpts.agent = agent;
-        // Zorg dat Host header correct is voor de upstream
-        fetchOpts.headers['Host'] = upstreamHost;
-        useUrl = ipUrl.toString();
+        const opts = { ...fetchOpts, agent, headers: { ...fetchOpts.headers, Host: upstreamHost } };
+        resp = await fetch(ipUrl.toString(), opts);
+        if (resp && resp.status) break;
+      } catch (e) {
+        lastErr = e;
       }
-    } catch (_) {
-      // val terug op directe fetch (kan falen als DNS stuk is)
     }
-
-    const resp = await fetch(useUrl, fetchOpts);
+    if (!resp) {
+      // Laatste poging: directe URL (indien DNS toch werkt)
+      try {
+        resp = await fetch(upstream, fetchOpts);
+      } catch (e) {
+        return res.status(502).send(String(lastErr || e));
+      }
+    }
 
     const text = await resp.text();
     res
